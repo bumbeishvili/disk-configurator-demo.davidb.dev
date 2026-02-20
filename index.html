@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disk Configurator — Parametric Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw; height: 100vh; overflow: hidden;
+    background: linear-gradient(145deg, #0d1117 0%, #161b22 40%, #1a2030 100%);
+    font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+    color: #e6edf3;
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+
+  /* dot grid */
+  body::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0);
+    background-size: 32px 32px;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 20px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    position: relative; z-index: 10;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 2px solid #58a6ff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: #58a6ff;
+  }
+  .header-title { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+  .header-sub { font-size: 11px; color: #8b949e; letter-spacing: 2px; text-transform: uppercase; }
+  .badge {
+    padding: 6px 14px; border-radius: 6px;
+    background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.2);
+    font-size: 12px; color: #58a6ff; font-weight: 600;
+  }
+
+  /* ── Main layout ── */
+  .main { flex: 1; display: flex; overflow: hidden; position: relative; z-index: 5; }
+
+  /* Viewport */
+  .viewport { flex: 1; position: relative; }
+  .viewport canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  .viewport canvas.dragging { cursor: grabbing; }
+  .viewport-hint {
+    position: absolute; bottom: 16px; left: 16px;
+    font-size: 10px; color: #484f58; letter-spacing: 2px; text-transform: uppercase;
+  }
+
+  /* ── Panel ── */
+  .panel {
+    width: 320px;
+    background: rgba(22,27,34,0.85);
+    backdrop-filter: blur(20px);
+    border-left: 1px solid rgba(255,255,255,0.06);
+    padding: 28px 24px;
+    display: flex; flex-direction: column; gap: 24px;
+    overflow-y: auto;
+  }
+  .section-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 2.5px;
+    text-transform: uppercase; color: #8b949e; margin-bottom: 12px;
+  }
+  .diameter-value {
+    font-size: 40px; font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums; margin-bottom: 4px;
+  }
+  .diameter-unit { font-size: 16px; color: #8b949e; font-weight: 500; margin-left: 4px; }
+
+  /* Slider */
+  input[type="range"] {
+    width: 100%; height: 6px; margin-top: 12px;
+    -webkit-appearance: none; appearance: none;
+    border-radius: 3px; outline: none; cursor: pointer;
+    background: linear-gradient(to right, #58a6ff 0%, #21262d 0%);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #58a6ff; cursor: pointer;
+    box-shadow: 0 0 8px rgba(88,166,255,0.5); border: 2px solid #0d1117;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #58a6ff; cursor: pointer;
+    box-shadow: 0 0 8px rgba(88,166,255,0.5); border: 2px solid #0d1117;
+  }
+  .range-labels {
+    display: flex; justify-content: space-between; margin-top: 6px;
+    font-size: 10px; color: #484f58;
+  }
+
+  .divider { height: 1px; background: rgba(255,255,255,0.06); }
+
+  /* Specs */
+  .specs { display: flex; flex-direction: column; gap: 10px; }
+  .spec-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; border-radius: 8px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+  }
+  .spec-label { font-size: 12px; color: #8b949e; }
+  .spec-right { display: flex; align-items: center; gap: 8px; }
+  .spec-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .spec-value.fixed { color: #e6edf3; }
+  .spec-value.scaled { color: #58a6ff; }
+  .spec-tag {
+    font-size: 8px; padding: 2px 5px; border-radius: 3px;
+    font-weight: 700; letter-spacing: 1px;
+  }
+  .spec-tag.fixed { background: rgba(139,148,158,0.15); color: #8b949e; }
+  .spec-tag.scaled { background: rgba(88,166,255,0.15); color: #58a6ff; }
+
+  /* CTA */
+  .cta-wrap { margin-top: auto; }
+  .cta-btn {
+    width: 100%; padding: 14px 20px; border-radius: 10px; border: none;
+    background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+    color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.5px;
+    cursor: pointer; box-shadow: 0 2px 12px rgba(46,160,67,0.3);
+    transition: transform 0.15s; font-family: inherit;
+  }
+  .cta-btn:hover { transform: translateY(-1px); }
+  .cta-sub {
+    text-align: center; margin-top: 10px;
+    font-size: 10px; color: #484f58; letter-spacing: 1px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .main { flex-direction: column; }
+    .viewport { min-height: 50vh; }
+    .panel { width: 100%; max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">⬡</div>
+    <div>
+      <div class="header-title">DISK CONFIGURATOR</div>
+      <div class="header-sub">Parametric Preview</div>
+    </div>
+  </div>
+  <div class="badge">PROTOTYPE v0.1</div>
+</header>
+
+<div class="main">
+  <div class="viewport" id="viewport">
+    <div class="viewport-hint">Drag to rotate</div>
+  </div>
+
+  <div class="panel">
+    <!-- Diameter -->
+    <div>
+      <div class="section-label">Outer Diameter</div>
+      <div class="diameter-value"><span id="diam-display">160</span><span class="diameter-unit">mm</span></div>
+      <input type="range" id="diam-slider" min="80" max="300" value="160">
+      <div class="range-labels"><span>80mm</span><span>300mm</span></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Specs -->
+    <div>
+      <div class="section-label" style="margin-bottom:14px">Specifications</div>
+      <div class="specs" id="specs-list"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- CTA -->
+    <div class="cta-wrap">
+      <button class="cta-btn">Generate STL — €XX.XX</button>
+      <div class="cta-sub">Stripe Checkout · Secure Payment</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function() {
+  // ── Constants ──
+  const MIN_D = 80, MAX_D = 300;
+  const THICKNESS = 12;
+  const CENTER_R = 15;
+  const INNER_N = 4, INNER_R = 3.5, INNER_PCD = 40;
+  const OUTER_N = 6, OUTER_R = 4, OUTER_PCD_RATIO = 0.78;
+
+  let diameter = 160;
+
+  // ── DOM refs ──
+  const slider = document.getElementById('diam-slider');
+  const display = document.getElementById('diam-display');
+  const specsList = document.getElementById('specs-list');
+  const container = document.getElementById('viewport');
+
+  // ── Three.js setup ──
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  container.insertBefore(renderer.domElement, container.firstChild);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 1, 2000);
+  camera.position.set(0, 100, 300);
+  camera.lookAt(0, 0, 0);
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+  dir.position.set(80, 120, 100);
+  dir.castShadow = true; dir.shadow.mapSize.set(1024, 1024);
+  scene.add(dir);
+  const fill = new THREE.DirectionalLight(0x8ecae6, 0.4);
+  fill.position.set(-60, 80, -40); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffd6a5, 0.3);
+  rim.position.set(0, -50, -80); scene.add(rim);
+
+  // Ground shadow
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(800, 800),
+    new THREE.ShadowMaterial({ opacity: 0.15 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -THICKNESS / 2 - 1;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Pivot
+  const pivot = new THREE.Group();
+  pivot.rotation.x = -0.4; pivot.rotation.y = 0.3;
+  scene.add(pivot);
+
+  // ── Build disk ──
+  function buildDisk(d) {
+    const outerR = d / 2;
+    const outerPCD = d * OUTER_PCD_RATIO / 2;
+
+    const shape = new THREE.Shape();
+    shape.absarc(0, 0, outerR, 0, Math.PI * 2, false);
+
+    const ch = new THREE.Path();
+    ch.absarc(0, 0, CENTER_R, 0, Math.PI * 2, true);
+    shape.holes.push(ch);
+
+    for (let i = 0; i < INNER_N; i++) {
+      const a = (i / INNER_N) * Math.PI * 2;
+      const h = new THREE.Path();
+      h.absarc(Math.cos(a) * INNER_PCD / 2, Math.sin(a) * INNER_PCD / 2, INNER_R, 0, Math.PI * 2, true);
+      shape.holes.push(h);
+    }
+
+    for (let i = 0; i < OUTER_N; i++) {
+      const a = (i / OUTER_N) * Math.PI * 2;
+      const h = new THREE.Path();
+      h.absarc(Math.cos(a) * outerPCD, Math.sin(a) * outerPCD, OUTER_R, 0, Math.PI * 2, true);
+      shape.holes.push(h);
+    }
+
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: THICKNESS, bevelEnabled: true,
+      bevelThickness: 0.8, bevelSize: 0.5, bevelSegments: 3, curveSegments: 64
+    });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xb0b8c0, roughness: 0.25, metalness: 0.85 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+
+    const torusGeo = new THREE.TorusGeometry(outerR - 1, 0.6, 8, 64);
+    const torusMat = new THREE.MeshStandardMaterial({ color: 0xc8cdd2, roughness: 0.2, metalness: 0.9 });
+    const r1 = new THREE.Mesh(torusGeo, torusMat); r1.position.z = THICKNESS;
+    const r2 = new THREE.Mesh(torusGeo.clone(), torusMat);
+
+    const g = new THREE.Group();
+    g.add(mesh); g.add(r1); g.add(r2);
+    g.rotation.x = -Math.PI / 2;
+    g.position.y = -THICKNESS / 2;
+    return g;
+  }
+
+  function disposeDisk(obj) {
+    obj.traverse(c => {
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
+    });
+  }
+
+  let disk = buildDisk(diameter);
+  let lastD = diameter;
+  const s0 = Math.min(1, 200 / diameter);
+  disk.scale.set(s0, s0, s0);
+  pivot.add(disk);
+
+  // ── Drag rotation ──
+  let dragging = false, lx = 0, ly = 0;
+  renderer.domElement.addEventListener('pointerdown', e => {
+    dragging = true; lx = e.clientX; ly = e.clientY;
+    renderer.domElement.classList.add('dragging');
+  });
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    pivot.rotation.y += (e.clientX - lx) * 0.005;
+    pivot.rotation.x = Math.max(-1.4, Math.min(1.4, pivot.rotation.x + (e.clientY - ly) * 0.005));
+    lx = e.clientX; ly = e.clientY;
+  });
+  window.addEventListener('pointerup', () => {
+    dragging = false;
+    renderer.domElement.classList.remove('dragging');
+  });
+
+  // ── Resize ──
+  function resize() {
+    const w = container.clientWidth, h = container.clientHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ── Specs ──
+  function updateSpecs() {
+    const outerBoltPCD = (diameter * OUTER_PCD_RATIO).toFixed(1);
+    const area = (Math.PI * (diameter / 2) ** 2 / 100).toFixed(1);
+    const rows = [
+      ['Center Hole ⌀', CENTER_R * 2 + ' mm', true],
+      ['Inner Bolt PCD', INNER_PCD + ' mm', true],
+      [`Inner Bolts (${INNER_N}×)`, '⌀' + INNER_R * 2 + ' mm', true],
+      ['Outer Bolt PCD', outerBoltPCD + ' mm', false],
+      [`Outer Bolts (${OUTER_N}×)`, '⌀' + OUTER_R * 2 + ' mm', false],
+      ['Thickness', THICKNESS + ' mm', true],
+      ['Face Area', area + ' cm²', false],
+    ];
+    specsList.innerHTML = rows.map(([label, value, fixed]) => `
+      <div class="spec-row">
+        <span class="spec-label">${label}</span>
+        <div class="spec-right">
+          <span class="spec-value ${fixed ? 'fixed' : 'scaled'}">${value}</span>
+          <span class="spec-tag ${fixed ? 'fixed' : 'scaled'}">${fixed ? 'FIXED' : 'SCALED'}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+  updateSpecs();
+
+  // ── Slider ──
+  slider.addEventListener('input', () => {
+    diameter = +slider.value;
+    display.textContent = diameter;
+    const pct = ((diameter - MIN_D) / (MAX_D - MIN_D)) * 100;
+    slider.style.background = `linear-gradient(to right, #58a6ff ${pct}%, #21262d ${pct}%)`;
+    updateSpecs();
+  });
+  // Init slider bg
+  slider.dispatchEvent(new Event('input'));
+
+  // ── Render loop ──
+  function animate() {
+    requestAnimationFrame(animate);
+
+    if (diameter !== lastD) {
+      pivot.remove(disk);
+      disposeDisk(disk);
+      disk = buildDisk(diameter);
+      const sc = Math.min(1, 200 / diameter);
+      disk.scale.set(sc, sc, sc);
+      pivot.add(disk);
+      lastD = diameter;
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+</script>
+</body>
+</html>
